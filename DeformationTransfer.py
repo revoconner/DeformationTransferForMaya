@@ -1,17 +1,16 @@
-#
 """
 DeformationTransfer
-    "Deformation Transfer" for Maya 2018
-
+    "Deformation Transfer" for Maya 2021+
+    Updated by Rev
     Reference:
         - Deformation Transfer, SIGGRAPH 2005
         
 """
 
 __author__ = "Naoya Iwamoto <iwanao731@gmail.com>"
-__status__ = "beta release"
-__version_ = "0.1"
-__date__ = "15 Feb 2019"
+__status__ = "unkown"
+__version__ = "0.1.1"
+__date__ = "25 Oct 2024"
 
 import sys
 import maya.api.OpenMaya as om
@@ -24,7 +23,7 @@ def maya_useNewAPI():
     pass
 
 def initializePlugin(plugin):
-    fnPlugin = om.MFnPlugin(plugin, vendor = 'Euclid Lab.', version = '0.1')
+    fnPlugin = om.MFnPlugin(plugin, vendor='Euclid Lab.', version='0.1')
     try:
         fnPlugin.registerCommand(DeformationTransferCmd.commandName, DeformationTransferCmd.creator)
     except:
@@ -36,7 +35,8 @@ def initializePlugin(plugin):
         cmds.menu('EuclidLab', label='EuclidLab')
     cmds.setParent('EuclidLab', menu=True)
     if not cmds.menu('Deformation Transfer', query=True, exists=True):
-        cmds.menuItem('Deformation Transfer', label='Deformation Transfer', tearOff=True, command='import maya.mel;maya.mel.eval("DeformationTransferBuild")')
+        cmds.menuItem('Deformation Transfer', label='Deformation Transfer', tearOff=True, 
+                     command='import maya.mel;maya.mel.eval("DeformationTransferBuild")')
 
 def uninitializePlugin(plugin):
     fnPlugin = om.MFnPlugin(plugin)
@@ -58,9 +58,9 @@ class DeformationTransferCmd(om.MPxCommand):
         return DeformationTransferCmd()
 
     def doIt(self, args):
-        print '---------------------'
-        print 'Deformation Transfer'
-        print '---------------------'
+        print('---------------------')
+        print('Deformation Transfer')
+        print('---------------------')
         DeformationTransfer()
 
 def getSelectMesh():
@@ -75,7 +75,7 @@ def getSelectMesh():
         apiType = dagPath.apiType()
         if apiType != om.MFn.kTransform:
             continue
-        for c in xrange(dagPath.childCount()):
+        for c in range(dagPath.childCount()):  # Changed xrange to range
             child = dagPath.child(c)
             if child.apiType() != om.MFn.kMesh:
                 continue
@@ -93,33 +93,30 @@ def setMatrixCol(mat, vec, iCol):
 
 def computeMatrixA(meshPath):
     mesh = om.MFnMesh(meshPath)
-    #numVertices, vertexList = mesh.getVertices()
-
-    #print "print numVertices : ", mesh.numVertices
 
     # get triangle information
     ___, indices = mesh.getTriangles()
 
     neighbor = []
     offset = len(neighbor)
-    neighbor = neighbor + [set() for v in xrange(mesh.numVertices)]
+    neighbor = neighbor + [set() for v in range(mesh.numVertices)]  # Changed xrange to range
 
     MatA = np.zeros((len(indices), mesh.numVertices))
 
-    for triID in xrange(len(indices) / 3):
+    for triID in range(len(indices) // 3):  # Changed division and xrange to range
         i0 = indices[triID * 3 + 0] + offset
         i1 = indices[triID * 3 + 1] + offset
         i2 = indices[triID * 3 + 2] + offset
 
-        e0 = mesh.getPoint(i1) - mesh.getPoint(i0);
-        e1 = mesh.getPoint(i2) - mesh.getPoint(i0);
+        e0 = mesh.getPoint(i1) - mesh.getPoint(i0)
+        e1 = mesh.getPoint(i2) - mesh.getPoint(i0)
 
         # Construct Va
-        Va = np.zeros((3, 2));
-        setMatrixCol(Va, e0, 0);
-        setMatrixCol(Va, e1, 1);
+        Va = np.zeros((3, 2))
+        setMatrixCol(Va, e0, 0)
+        setMatrixCol(Va, e1, 1)
 
-        # QR Decomposition (TBD)        
+        # QR Decomposition
         Q, R = np.linalg.qr(Va)
 
         invRQT = np.dot(np.linalg.inv(R), Q.transpose())
@@ -142,56 +139,50 @@ def computeMatrixA(meshPath):
     return MatA
 
 def calcNormal(v1, v2, v3):
-    return np.cross((v2-v1),(v3-v1))
+    return np.cross((v2-v1), (v3-v1))
 
 def setTriEdgeMatrix(mesh, i1, i2, i3):
-
     matV = np.zeros((3,3))
 
-    v1 = mesh.getPoint(i1);
-    v2 = mesh.getPoint(i2);
-    v3 = mesh.getPoint(i3);
+    v1 = mesh.getPoint(i1)
+    v2 = mesh.getPoint(i2)
+    v3 = mesh.getPoint(i3)
 
-    e1 = v2 - v1;
-    e2 = v3 - v1;
-    e3 = calcNormal(v1, v2, v3);
+    e1 = v2 - v1
+    e2 = v3 - v1
+    e3 = calcNormal(v1, v2, v3)
 
-    setMatrixCol(matV, e1, 0);
-    setMatrixCol(matV, e2, 1);
-    setMatrixCol(matV, e3, 2);
+    setMatrixCol(matV, e1, 0)
+    setMatrixCol(matV, e2, 1)
+    setMatrixCol(matV, e3, 2)
 
     return matV
 
 def setMatrixBlock(matF, matBlock, irow, icol):
-
     rows, cols = matBlock.shape
 
-    for r in range(rows):
-        for c in range(cols):
+    for r in range(rows):  # Changed range
+        for c in range(cols):  # Changed range
             matF[irow+r][icol+c] = matBlock[r][c]
 
 def computeMatrixF(srcRefMeshPath, srcDefMeshPath):
-
     src_ref_mesh = om.MFnMesh(srcRefMeshPath)
     src_def_mesh = om.MFnMesh(srcDefMeshPath)
     
-    #numVertices, src_vertexList = src_ref_mesh.getVertices()
-
     # get triangle information
     ___, indices = src_ref_mesh.getTriangles()
 
-    numTriangle = len(indices)/3
+    numTriangle = len(indices)//3  # Changed division
 
     # loop triangle
     neighbor = []
     offset = len(neighbor)
-    neighbor = neighbor + [set() for v in xrange(src_ref_mesh.numVertices)]
+    neighbor = neighbor + [set() for v in range(src_ref_mesh.numVertices)]  # Changed xrange to range
 
     # set MatF
     matF = np.zeros((numTriangle*3, 3))
     
-    for triID in xrange(numTriangle):
-
+    for triID in range(numTriangle):  # Changed xrange to range
         i0 = indices[triID * 3 + 0] + offset
         i1 = indices[triID * 3 + 1] + offset
         i2 = indices[triID * 3 + 2] + offset
@@ -213,7 +204,6 @@ def computeMatrixF(srcRefMeshPath, srcDefMeshPath):
     return matF
 
 def DeformationTransfer():
-
     meshPaths = getSelectMesh()
 
     src_ref_mesh_path = meshPaths[0]
@@ -222,38 +212,37 @@ def DeformationTransfer():
     trg_def_mesh_path = meshPaths[3]
 
     # set target reference model
-    print "analysis target reference model"
+    print("analysis target reference model")
     MatA = computeMatrixA(trg_ref_mesh_path)
-    print "MatA : ", MatA.shape
+    print("MatA : ", MatA.shape)
 
     MatAt = MatA.transpose()
-    print "MatAt : ", MatAt.shape
+    print("MatAt : ", MatAt.shape)
 
     LU = linalg.lu_factor(np.dot(MatAt, MatA))   # LU decompose 
 
     # transfer to target model
-    print "analysis transfer of source ref and def"
+    print("analysis transfer of source ref and def")
     matF = computeMatrixF(src_ref_mesh_path, src_def_mesh_path) # deformation gradient for source model
     
-    print "matF : ", matF.shape
+    print("matF : ", matF.shape)
 
     # solve deformation transfer
     UtS = np.dot(MatAt, matF)
 
-    print "UtS : ", UtS.shape
+    print("UtS : ", UtS.shape)
 
     trg_def_x = linalg.lu_solve(LU, UtS)
 
-    print "trg_def_x : ", trg_def_x.shape
+    print("trg_def_x : ", trg_def_x.shape)
 
     # set result to target def model
     trg_def_mesh = om.MFnMesh(trg_def_mesh_path)
-    for i in xrange(trg_def_mesh.numVertices):
+    for i in range(trg_def_mesh.numVertices):  # Changed xrange to range
         pos = trg_def_mesh.getPoint(i)
         pos[0] = trg_def_x[i][0]
         pos[1] = trg_def_x[i][1]
         pos[2] = trg_def_x[i][2]
         trg_def_mesh.setPoint(i, pos)
 
-    print "done"
-
+    print("done")
